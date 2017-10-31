@@ -559,7 +559,7 @@ bot.message(start_with: ['!next stage', /(what|when)('s| is) next stage/, /what 
 	end
 end
 
-bot.message(start_with: [REGEX_WALL_CALCULATOR], in: channels('spam')) do |bot_event|
+bot.message(start_with: [REGEX_WALL_CALCULATOR], in: channels('spam', 'control')) do |bot_event|
   md = bot_event.content.match(REGEX_WALL_CALCULATOR)
   msg = "#{bot_event.user.mention},\n"
   if md['wall_defense']
