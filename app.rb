@@ -123,9 +123,17 @@ def load_config(source_file: )
   loaded_config
 end
 
-def save_config(source_file:, config:, pretty_print: true)
+def save_config(source_file:, config:, pretty_print: true, backup: false)
   source_file = File.expand_path(source_file)
-  write_file(source_file: source_file, content: MultiJson.dump(config, pretty: pretty_print))
+  FileUtils.cp(source_file, source_file + DateTime.now.strftime(".%Y%m%d%H%M%S")) if backup #TODO: Allow for different backup methods (git?)
+  begin
+    content = MultiJson.dump(config, pretty: pretty_print)
+  rescue RuntimeError => e
+    puts "Error while trying to dump config:\n#{config}\n#{e.message}"
+    raise e
+  else
+    write_file(source_file: source_file, content: content)
+  end
   config
 end
 
@@ -351,18 +359,8 @@ def store_events(events=nil)
       event.delete(:time)
     end
   end
-	FileUtils.cp(EVENTS_SOURCE, EVENTS_SOURCE + DateTime.now.strftime(".%Y%m%d%H%M%S"))
-  begin
-	  json = MultiJson.dump(events, :pretty => true)
-  rescue Exception => e
-    puts "Error while dumping json"
-    #binding.pry
-    raise e
-  else
-  	File.open(EVENTS_SOURCE,'w+') do |f|
-  	  f.puts(json)
-    end
-	end
+
+  save_config(source_file: EVENTS_SOURCE, config: events, pretty_print: true, backup: true)
 
   #Force a cache clear:
   @scheduled_events = nil
