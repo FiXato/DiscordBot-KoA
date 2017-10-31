@@ -114,6 +114,7 @@ REGEX_SET_FALLEN_KNIGHTS = /^!set (?:(?<alliance_tag>#{config['alliances'].keys.
 REGEX_SET_GOLEM = /^!set (?<keyword>golem|kingdom threat) (?<content>.+)$/i.freeze
 WALL_DMG_PER_MINUTE = (4.0).freeze
 WALL_BURNING_DURATION_PER_HIT = ChronicDuration.parse('30 minutes').freeze
+REPOSITORY_URL = "https://github.com/BeardBrewery/DiscordBot-KoA"
 
 # This statement creates a bot with the specified token and application ID. After this line, you can add events to the
 # created bot, and eventually run it.
@@ -590,7 +591,11 @@ bot.message(start_with: [REGEX_WALL_CALCULATOR], in: channels('spam')) do |bot_e
 end
 
 bot.message(content: '!about') do |bot_event|
-  bot_event.respond "This bot is created by FiXato (https://profile.fixato.org), and uses meew0's discordrb bot framework (https://github.com/meew0/discordrb), as well as the oj, multi-json, chronic and chronic-duration Ruby gems. If you like what this bot does, donations for its upkeep and development are welcome at <https://PayPal.Me/FiXatoNL> :joy:"
+  bot_event.respond "This bot is created by FiXato (https://profile.fixato.org), and uses meew0's discordrb bot framework (https://github.com/meew0/discordrb), as well as the oj, multi-json, chronic and chronic-duration Ruby gems. If you like what this bot does, donations for its upkeep and development are welcome at <https://PayPal.Me/FiXatoNL> :joy:\nThe source code is available at: #{REPOSITORY_URL}"
+end
+
+bot.message(content: '!source') do |bot_event|
+  bot_event.respond "The source code is available at: #{REPOSITORY_URL}"
 end
 
 bot.include! JoinAnnouncer
