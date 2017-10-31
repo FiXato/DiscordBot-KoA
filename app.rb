@@ -1,6 +1,7 @@
 require 'fileutils'
 require 'set'
 require 'open-uri'
+require 'yaml'
 
 require 'chronic'
 require 'chronic_duration'
@@ -13,66 +14,7 @@ require 'discordrb'
 require 'pry'
 #require 'fuzzy_match'
 
-#TODO: Refactor this to a YAML file with local references
-DEFAULT_CONFIG = {
-  'events_map' => {
-    'a1z-portal'     => '**Main** Alliance Portal',
-    'a2z-portal'     => '**Farm** Alliance Portal',
-    'a1z fallen knights'         => '**Main** Fallen Knights',
-    'a2z fallen knights'         => '**Farm** Fallen Knights',
-    'golem'          => 'Kingdom Threat (Golem)',
-  },
-  'channels' => {
-    'public' => %w[#general],
-    'alliance' => %w[#alliance #alliance-spam], 
-    'spam' => %w[#spam #alliance-spam],
-    'control' => %w[#staff],
-  },
-  'alliances' => {
-    'a1z' => 'A to Z main alliance',
-    'a2z' => 'A to Z farm alliance',
-  },
-  "join_announcer" => {
-    "welcome_message" => "Welcome %{user_mention} to our Discord server!",
-  },
-  "template_events" => {
-    "template" => {
-      "name"          => "Descriptive name that matches up with events_map",
-      "id"            => "id",
-      "class"         => "class",
-      "ISO8601"       => "2017-01-31T20:00:00+00:00",
-      "label_class"   => "primary",
-      "private"       => false
-    },
-  }
-}
-
-DEFAULT_CONFIG['template_events']['portal'] = DEFAULT_CONFIG['template_events']['template'].merge({
-  "name"          => DEFAULT_CONFIG['events_map']['a1z-portal'],
-  "id"            => "portal",
-  "class"         => "portal",
-  "private"       => true
-})
-
-DEFAULT_CONFIG['template_events']['fallen knights'] = DEFAULT_CONFIG['template_events']['template'].merge({
-  "id"            => "fallen",
-  "class"         => "fallen",
-  "private"       => true
-})
-
-DEFAULT_CONFIG['template_events']['golem'] = DEFAULT_CONFIG['template_events']['template'].merge({
-    "id"            => "kingdom-golem-threat",
-    "class"         => "golem",
-    "label_class"   => "danger",
-})
-
-DEFAULT_CONFIG.freeze
-
-def config_keys_changed_from_defaults?(loaded_config)
-  loaded_config.keys.size != DEFAULT_CONFIG.keys.size || loaded_config.keys.sort != DEFAULT_CONFIG.keys.sort
-end
-
-def get_value_from_arguments(option_name: nil, env_key:, default:)
+def get_value_from_arguments(option_name: nil, env_key:nil, default:)
   if option_name && option_index = ARGV.index(option_name)
     ARGV.delete_at(option_index)
     abort("Command line option '#{option_name}' should be followed by a another argument.") unless option_value = ARGV.delete_at(option_index)
@@ -82,6 +24,12 @@ def get_value_from_arguments(option_name: nil, env_key:, default:)
   else
     return default
   end
+end
+
+DEFAULT_CONFIG = YAML.load_file(get_value_from_arguments(option_name: '--default-config', default:'./default_config.yaml')).freeze
+
+def config_keys_changed_from_defaults?(loaded_config)
+  loaded_config.keys.size != DEFAULT_CONFIG.keys.size || loaded_config.keys.sort != DEFAULT_CONFIG.keys.sort
 end
 
 def config
