@@ -1,0 +1,50 @@
+---
+events_map:
+  a1z-portal: &PORTAL "**Main** Alliance Portal"
+  a2z-portal: "**Farm** Alliance Portal"
+  a1z fallen knights: &FALLEN "**Main** Fallen Knights"
+  a2z fallen knights: "**Farm** Fallen Knights"
+  golem: &GOLEM Kingdom Threat (Golem)
+channels:
+  public:
+  - "#general"
+  alliance:
+  - "#alliance"
+  - "#alliance-spam"
+  spam:
+  - "#spam"
+  - "#alliance-spam"
+  control:
+  - "#staff"
+alliances:
+  a1z: A to Z main alliance
+  a2z: A to Z farm alliance
+join_announcer:
+  welcome_message: Welcome %{user_mention} to our Discord server!
+template_events:
+  template: &DEFAULTS
+    name: Descriptive name that matches up with events_map
+    id: id
+    class: class
+    ISO8601: '2017-01-31T20:00:00+00:00'
+    label_class: primary
+  portal:
+    <<: *DEFAULTS
+    name: *PORTAL
+    id: portal
+    class: portal
+    private: true
+  fallen knights:
+    <<: *DEFAULTS
+    name: *FALLEN
+    id: fallen
+    class: fallen
+    label_class: success
+    private: true
+  golem:
+    <<: *DEFAULTS
+    name: *GOLEM
+    id: kingdom-golem-threat
+    class: golem
+    ISO8601: '2017-01-31T00:00:00+00:00'
+    label_class: danger
