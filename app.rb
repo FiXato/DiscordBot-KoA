@@ -73,11 +73,10 @@ def config_keys_changed_from_defaults?(loaded_config)
 end
 
 def get_value_from_arguments(option_name: nil, env_key:, default:)
-  if option_name && events_source_index = ARGV.index(option_name)
-    events_source_index += 1
-    abort("Command line option '#{option_name}' should be followed by a another argument.") unless ARGV[events_source_index]
-    ARGV.delete(option_name)
-    return File.expand_path(ARGV.delete_at(events_source_index))
+  if option_name && option_index = ARGV.index(option_name)
+    ARGV.delete_at(option_index)
+    abort("Command line option '#{option_name}' should be followed by a another argument.") unless option_value = ARGV.delete_at(option_index)
+    return option_value
   elsif env_key && ENV[env_key]
     return ENV[env_key]
   else
