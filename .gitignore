@@ -1,6 +1,8 @@
 *.gem
 *.rbc
 /.config
+/.config.json
+/*.env
 /coverage/
 /InstalledFiles
 /pkg/

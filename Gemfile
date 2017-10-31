@@ -1,0 +1,12 @@
+source 'https://rubygems.org'
+gem 'oj'
+gem 'multi_json'
+gem 'pry'
+gem 'pry-rescue'
+
+gem 'discordrb'
+# gem 'google-cloud-vision'
+# gem 'google-cloud-datastore'
+#gem 'fuzzy_match'
+gem 'chronic'
+gem 'chronic_duration'
