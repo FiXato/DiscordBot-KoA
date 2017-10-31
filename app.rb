@@ -13,6 +13,7 @@ require 'discordrb'
 require 'pry'
 #require 'fuzzy_match'
 
+#TODO: Refactor this to a YAML file with local references
 DEFAULT_CONFIG = {
   'events_map' => {
     'a1z-portal'     => '**Main** Alliance Portal',
@@ -34,7 +35,38 @@ DEFAULT_CONFIG = {
   "join_announcer" => {
     "welcome_message" => "Welcome %{user_mention} to our Discord server!",
   },
-}.freeze
+  "template_events" => {
+    "template" => {
+      "name"          => "Descriptive name that matches up with events_map",
+      "id"            => "id",
+      "class"         => "class",
+      "ISO8601"       => "2017-01-31T20:00:00+00:00",
+      "label_class"   => "primary",
+      "private"       => false
+    },
+  }
+}
+
+DEFAULT_CONFIG['template_events']['portal'] = DEFAULT_CONFIG['template_events']['template'].merge({
+  "name"          => DEFAULT_CONFIG['events_map']['a1z-portal'],
+  "id"            => "portal",
+  "class"         => "portal",
+  "private"       => true
+})
+
+DEFAULT_CONFIG['template_events']['fallen knights'] = DEFAULT_CONFIG['template_events']['template'].merge({
+  "id"            => "fallen",
+  "class"         => "fallen",
+  "private"       => true
+})
+
+DEFAULT_CONFIG['template_events']['golem'] = DEFAULT_CONFIG['template_events']['template'].merge({
+    "id"            => "kingdom-golem-threat",
+    "class"         => "golem",
+    "label_class"   => "danger",
+})
+
+DEFAULT_CONFIG.freeze
 
 def config_keys_changed_from_defaults?(loaded_config)
   loaded_config.keys.size != DEFAULT_CONFIG.keys.size || loaded_config.keys.sort != DEFAULT_CONFIG.keys.sort
@@ -268,7 +300,7 @@ def next_event(bot_event:, clear_cache: false)
 	end
 end
 
-def set_event(bot_event:, event_key:, content:)
+def set_event(bot_event:, event_key:, content:, event_type:)
 	unless bot_event.user.roles.any?{|role|['R4', 'R5'].include?(role.name)}
 		bot_event.respond "#{bot_event.user.mention} you don't have access to this command"
 	else
@@ -280,9 +312,15 @@ def set_event(bot_event:, event_key:, content:)
   	  event['name'] == config['events_map'][event_key]
   	end
   	if target_event.nil? || target_event.empty?
-  		bot_event.respond "#{bot_event.user.mention}, I could not find an '#{event_key}'-event called '#{config['events_map'][event_key]}'"
-  		return false
+      if target_event = config['template_events'][event_type]
+        target_event['name'] = config['events_map'][event_key]
+        events['events'] << target_event
+      else
+        bot_event.respond "#{bot_event.user.mention}, I could not find an '#{event_key}'-event called '#{config['events_map'][event_key]}', nor could I find a template for it."
+        return false
+      end
   	end
+
   	begin
   		target_event['ISO8601'] = Chronic.parse(event_time).iso8601
   	rescue
@@ -347,7 +385,7 @@ bot.message(content: REGEX_SET_ALLIANCE_PORTAL, in:  channels('alliance', 'contr
   md = bot_event.content.match(REGEX_SET_ALLIANCE_PORTAL)
   alliance_tag = md['alliance_tag'] || config['alliances'].keys.first
 
-	set_event(bot_event: bot_event, event_key: "#{alliance_tag}-portal", content: md['content'])
+	set_event(bot_event: bot_event, event_type: 'portal', event_key: "#{alliance_tag}-portal", content: md['content'])
 	alliance_portal_event(bot_event: bot_event, clear_cache: true, alliance: alliance_tag)
 end
 
@@ -355,13 +393,13 @@ bot.message(content: REGEX_SET_FALLEN_KNIGHTS, in: channels('alliance', 'control
   md = bot_event.content.match(REGEX_SET_FALLEN_KNIGHTS)
   alliance_tag = md['alliance_tag'] || config['alliances'].keys.first
 
-	set_event(bot_event: bot_event, event_key: 'fallen knights', content: md['content'])
-	fallen_knights_event(bot_event: bot_event, clear_cache: true)
+	set_event(bot_event: bot_event, event_type: 'fallen knights', event_key: "#{alliance_tag} fallen knights", content: md['content'])
+	fallen_knights_event(bot_event: bot_event, clear_cache: true, alliance: alliance_tag)
 end
 
 bot.message(content: REGEX_SET_GOLEM, in: channels('all')) do |bot_event|
   md = bot_event.content.match(REGEX_SET_GOLEM)
-	set_event(bot_event: bot_event, event_key: 'golem', content: md['content'])
+	set_event(bot_event: bot_event, event_type: 'golem', event_key: 'golem', content: md['content'])
 	golem_event(bot_event: bot_event, clear_cache: true)
 end
 
