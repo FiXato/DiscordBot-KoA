@@ -86,8 +86,15 @@ def get_value_from_arguments(option_name: nil, env_key:, default:)
 end
 
 def config
+  return @config if @config
+
   source_file = get_value_from_arguments(option_name: '--config-file', env_key: 'DISCORD_BOT_CONFIG_FILE', default: './.config.json')
-  @config ||= load_config(source_file: source_file) || save_config(source_file: source_file, config: DEFAULT_CONFIG)
+  unless @config = load_config(source_file: source_file)
+    save_config(source_file: source_file, config: DEFAULT_CONFIG)
+    abort("Your config was empty. I've generated a valid configuration in its placed based on our defaults. Please edit (#{source_file}) and restart")
+  end
+
+  @config
 end
 
 def compare_config_to_defaults(loaded_config)
