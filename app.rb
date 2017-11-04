@@ -115,6 +115,8 @@ REGEX_SET_GOLEM = /^!set (?<keyword>golem|kingdom threat) (?<content>.+)$/i.free
 WALL_DMG_PER_MINUTE = (4.0).freeze
 WALL_BURNING_DURATION_PER_HIT = ChronicDuration.parse('30 minutes').freeze
 REPOSITORY_URL = "https://github.com/BeardBrewery/DiscordBot-KoA"
+GOLD_EVENT_INTERVAL = '2 weeks from now'.freeze
+ALLIANCE_EVENT_INTERVAL = '5 weeks from now'.freeze
 
 # This statement creates a bot with the specified token and application ID. After this line, you can add events to the
 # created bot, and eventually run it.
@@ -481,8 +483,8 @@ bot.message(start_with: ['!reschedule gold event', '!reschedule alliance event']
     msg = ""
     md = bot_event.content.match(/!reschedule (?<event_type>gold|alliance) event/i)
     event_type = md['event_type'].capitalize + ' Event'
-    interval = '2 weeks from now'
-    interval = '5 weeks from now' if event_type == 'Alliance Event'
+    interval = GOLD_EVENT_INTERVAL
+    interval = ALLIANCE_EVENT_INTERVAL if event_type == 'Alliance Event'
     events = scheduled_events(clear_cache: false, include_expired: true, restrict_types: [event_type], sort: :time, bot_event: bot_event)
     events.each do |event|
       old_time = event[:time]
