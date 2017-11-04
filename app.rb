@@ -264,6 +264,7 @@ end
 def next_event(bot_event:, clear_cache: false)
 	if target_event = scheduled_events(include_expired: false, sort: :time, clear_cache: clear_cache, include_private: include_private?(bot_event)).first
 		msg = "#{bot_event.user.mention}: Next event is #{target_event['name']} and is currently scheduled for #{target_event[:time]}, which is in about #{time_difference(target_event)}."
+    msg += "\nThis does not include private alliance events as this is a public channel." unless include_private?(bot_event)
 		bot_event.respond check_confirmed(target_event, msg)
 	else
 		bot_event.respond "Sorry #{bot_event.user.mention}, there's currently no next event scheduled yet."
@@ -549,6 +550,7 @@ bot.message(start_with: /!next \d+ events/, in: channels('all')) do |bot_event|
 			msg += " [UNCONFIRMED]" if target_event['status'] == 'unconfirmed' rescue false
 			msg += "\n"
 		end
+    msg += "\nThis does not include private alliance events as this is a public channel." unless include_private?(bot_event)
 		split_message(msg, 1950).each do |msg|
 			bot_event.respond msg
 		end
