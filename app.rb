@@ -104,7 +104,7 @@ EVENTS_SOURCE = File.expand_path(get_value_from_arguments(option_name: '--events
 ENV['TZ'] = get_value_from_arguments(option_name: '--timezone', env_key: 'TZ', default: 'UTC').freeze # Chronic uses ENV['TZ'] for its timezone.
 DISCORD_TOKEN = get_value_from_arguments(option_name: '--discord-token', env_key: 'DISCORD_BOT_TOKEN', default: nil).freeze
 DISCORD_CLIENT_ID = get_value_from_arguments(option_name: '--discord-client-id', env_key: 'DISCORD_BOT_CLIENT_ID', default: nil).freeze
-REGEX_UPGRADE_CALCULATOR = /(upgrade:?|will it finish in time\??) (?<duration>((?<days>\d+)d ?)?(?<hours>\d+):(?<minutes>\d+):(?<seconds>\d+))(?<timer_help> (?<base_number_helps>\d+)\+(?<bonus_number_helps>\d+) (?<base_timer_help_duration>\d+)\+(?<bonus_timer_help_duration>\d+))?/i.freeze
+REGEX_UPGRADE_CALCULATOR = /(upgrade:?|will it finish in time\??) (?<duration>((?<days>\d+)d ?)?(?<hours>\d+):(?<minutes>\d+):(?<seconds>\d+))(?<timer_help> (?<base_number_helps>\d+)\+(?<bonus_number_helps>\d+) (?<base_timer_help_duration>\d+)\+(?<bonus_timer_help_duration>\d+))?(?<next_event> -next>)?(?<restrict_type> GE-only)?/i.freeze
 REGEX_SPEEDUPS = /how long are (?<m5>\d+)[: ](?<h1>\d+)[: ](?<h3>\d+) speedups\??/i.freeze
 REGEX_WALL_CALCULATOR = /!wall(?<duration> (?:(?<days>\d)d ?)?(?<hours>\d+):(?<minutes>\d+):(?<seconds>\d+)?)?(?<wall_defense> (?<current_wall_defense>\d+)(?:\/(?<max_wall_defense>\d+))?)?/i.freeze
 REGEX_GET_ALLIANCE_PORTAL = /^(?:!(alliance )?portal|when(?:'| i)s (?:(?<alliance_tag>#{config['alliances'].keys.join('|')}) )?(?:alliance )?portal|(?:(?<alliance_tag>#{config['alliances'].keys.join('|')}) )?(?:alliance )?portal soon\?)/i.freeze
@@ -200,6 +200,11 @@ end
 
 bot.message(start_with: '!help') do |bot_event|
   msg = open('help_general.md').read % help_vars(bot_event)
+  bot_event.respond(msg) 
+end
+
+bot.message(start_with: '!calculators') do |bot_event|
+  msg = open('help_calculators.md').read % help_vars(bot_event)
   bot_event.respond(msg) 
 end
 
@@ -384,12 +389,16 @@ end
 
 bot.message(start_with: [REGEX_UPGRADE_CALCULATOR], in: channels('spam', 'control')) do |bot_event|
   clear_cache = bot_event.content.include?('clearcache') && bot_event.user.roles.any?{|role|['R4', 'R5'].include?(role.name)}
-  upgrade_calculator(bot_event)
+  restrict_types = (bot_event.content.gsub!(/ GE-only/i, '') ? ['Gold Event'] : [])
+  index = (bot_event.content.gsub!(/ -next/i, '') ? 1 : 0)
+  upgrade_calculator(bot_event, restrict_types: restrict_types, index: index)
 end
 
-def upgrade_calculator(bot_event, format: :default)
-  events = scheduled_events(clear_cache: false, include_expired: false, names: ['Upgrade Stage'], sort: :time, bot_event: nil)
-  time_till_upgrade_stage = time_difference(events.first, format: :seconds)
+def upgrade_calculator(bot_event, format: :default, restrict_types: [], index: 0)
+  events = scheduled_events(clear_cache: false, include_expired: false, names: ['Upgrade Stage'], restrict_types: restrict_types, sort: :time, bot_event: nil)
+  event = events[index]
+  #TODO: Loop through all events to check which event is the closest.
+  time_till_upgrade_stage = time_difference(event, format: :seconds)
   md = bot_event.content.match(REGEX_UPGRADE_CALCULATOR)
   unless md
     bot_event.respond "Could not match your message against the expected format 1d 12:59:59 10+9 60+9"
@@ -434,7 +443,7 @@ def upgrade_calculator(bot_event, format: :default)
       end
 
       msg+=<<~BOTRESPONSE      
-        Till next Upgrade Stage:
+        Till next #{event['type']} Upgrade Stage:
         ***#{ChronicDuration.output(time_till_upgrade_stage)}***
 
         It will finish:
