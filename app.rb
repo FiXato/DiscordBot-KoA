@@ -36,7 +36,7 @@ def config
   return @config if @config
 
   source_file = get_value_from_arguments(option_name: '--config-file', env_key: 'DISCORD_BOT_CONFIG_FILE', default: './.config.json')
-  unless @config = load_config(source_file: source_file)
+  unless @config = load_config(source_file: source_file, compare: true)
     save_config(source_file: source_file, config: DEFAULT_CONFIG)
     abort("Your config was empty. I've generated a valid configuration in its placed based on our defaults. Please edit (#{source_file}) and restart")
   end
@@ -63,17 +63,17 @@ def compare_config_to_defaults(loaded_config)
   CONFIG_EOS
 end
 
-def load_config(source_file: )
+def load_config(source_file: ,compare: false)
   source_file = File.expand_path(source_file)
   return nil unless File.exist?(source_file)
   loaded_config = MultiJson.load(open(source_file))
-  abort("Loaded config does not contain the same amount of keys as the default config. Please your config with the default config, make the appropriate changes, and try again.\n" + compare_config_to_defaults(loaded_config)) if config_keys_changed_from_defaults?(loaded_config)
+  abort("Loaded config does not contain the same amount of keys as the default config. Please your config with the default config, make the appropriate changes, and try again.\n" + compare_config_to_defaults(loaded_config)) if compare && config_keys_changed_from_defaults?(loaded_config)
   loaded_config
 end
 
 def save_config(source_file:, config:, pretty_print: true, backup: false)
   source_file = File.expand_path(source_file)
-  FileUtils.cp(source_file, source_file + DateTime.now.strftime(".%Y%m%d%H%M%S")) if backup #TODO: Allow for different backup methods (git?)
+  FileUtils.cp(source_file, source_file + DateTime.now.strftime(".%Y%m%d%H%M%S")) if backup && File.exist?(source_file) #TODO: Allow for different backup methods (git?)
   begin
     content = MultiJson.dump(config, pretty: pretty_print)
   rescue RuntimeError => e
@@ -127,7 +127,7 @@ ALLIANCE_EVENT_INTERVAL = '5 weeks from now'.freeze
 # you, look here: https://github.com/meew0/discordrb/wiki/Redirect-URIs-and-RPC-origins
 # After creating the bot, simply copy the token (*not* the OAuth2 secret) and the client ID and put it into the
 # respective places.
-bot = Discordrb::Bot.new token: DISCORD_TOKEN, client_id: DISCORD_CLIENT_ID.to_i
+bot = Discordrb::Commands::CommandBot.new token: DISCORD_TOKEN, client_id: DISCORD_CLIENT_ID.to_i, prefix: '!'
 
 if ARGV.delete('--invite-url')
   puts "This bot's invite URL is #{bot.invite_url}."
@@ -403,7 +403,6 @@ def upgrade_calculator(bot_event, format: :default, restrict_types: [], index: 0
   md = bot_event.content.match(REGEX_UPGRADE_CALCULATOR)
   unless md
     bot_event.respond "Could not match your message against the expected format 1d 12:59:59 10+9 60+9"
-    binding.pry
   else
     upgrade_seconds = ChronicDuration.parse(md['duration'].strip)
     total_timer_help = 0
@@ -611,6 +610,112 @@ bot.message(content: '!source') do |bot_event|
   bot_event.respond "The source code is available at: #{REPOSITORY_URL}"
 end
 
+module CoordinateBookmarks
+  BOOKMARKS_SOURCE = get_value_from_arguments(option_name: '--bookmarks-source', env_key: 'BOOKMARKS_SOURCE', default: './.bookmarks.json').freeze
+  def self.bookmarks
+    return @bookmarks if @bookmarks
+    return @bookmarks = {} unless bookmarks = load_config(source_file: BOOKMARKS_SOURCE)
+    @bookmarks = {}
+    bookmarks.each do |coords, bookmark|
+      bookmark = Bookmark.json_create(bookmark)
+      @bookmarks[bookmark.coords] = bookmark
+    end
+  end
+
+  class Bookmark
+    attr_reader :type, :name, :x, :y, :created_by, :created_on, :last_modified_by, :last_modified_on, :alliance_tag
+    def initialize(type:, name:, x:, y:, created_by:, created_on: Time.now, last_modified_by: nil, last_modified_on: Time.now, alliance_tag: nil)
+      @type = type
+      @name = name
+      @x = x
+      @y = y
+      @created_by = created_by
+      @created_on = created_on.kind_of?(Time) ? created_on : Chronic.parse(created_on)
+      @last_modified_by = last_modified_by
+      @last_modified_on = last_modified_on.kind_of?(Time) ? last_modified_on : Chronic.parse(last_modified_on)
+      @alliance_tag = alliance_tag
+    end
+
+    def id
+      "#{alliance_tag}#{type}#{name}"
+    end
+
+    def coords
+      [x, y].join(':')
+    end
+
+    def to_s
+      msg = "#{coords} [#{alliance_tag}] #{name} #{type}\n  Created on #{created_on} by #{created_by}\n"
+      msg += "  Last modified on #{last_modified_on} by #{last_modified_by}\n" if last_modified_by
+      msg
+    end
+  
+    def to_json(*a)
+      { json_class: self.class.name,
+        type: @type,
+        name: @name,
+        x: @x,
+        y: @y,
+        created_by: @created_by,
+        created_on: @created_on.to_s,
+        last_modified_by: @modified_by,
+        last_modified_on: @modified_on.to_s,
+        alliance_tag: @alliance_tag
+      }.to_json(*a)
+    end
+
+    def self.json_create(o)
+      from_json = new(
+        x: o['x'], 
+        y: o['y'], 
+        type: o['type'],
+        name: o['name'],
+        alliance_tag: o['alliance_tag'],
+        created_by: o['created_by'],
+        last_modified_by: o['last_modified_by'],
+        created_on: Chronic.parse(o['created_on']),
+        last_modified_on: Chronic.parse(o['last_modified_on'])
+      )
+    end
+  end
+
+  extend Discordrb::Commands::CommandContainer
+    
+  command :bookmark do |bot_event, action, *args|
+    case action
+      when 'add'
+          if md = args.join(' ').match(/(?<type>(?:alliance )?fort|hive|castle|poi|point of interest|avalon|misc) (?<coords>(?<x>\d{1,4})[: ,](?<y>\d{1,4})) (?:\[(?<alliance_tag>[a-z0-9]{3})\] ?)?(?<name>.+)/i)
+            keywords = {created_by: bot_event.user.mention}
+            [:type, :name, :x, :y, :alliance_tag].each do |key|
+              keywords[key] = md[key.to_s]
+            end
+            bookmark = Bookmark.new(keywords)
+            bookmarks[bookmark.coords] = bookmark
+            save_config(source_file: BOOKMARKS_SOURCE, config: bookmarks, pretty_print: false, backup: true)
+            bot_event.respond "#{bot_event.user.mention}, I've added the following bookmark:\n\n#{bookmark}"
+          else
+            bot_event.respond "#{bot_event.user.mention}, when adding bookmarks, request should be in the format:\n!bookmark add type coords [tag] name\nor:\n!bookmark add type coords name\nEx:\n\n!bookmark add fort 1234:567 [d0a] Dead 0r Alive"
+          end
+        break
+      when 'list'
+        if bookmarks.empty?
+          bot_event.respond "#{bot_event.user.mention}, I could not find any bookmarks"  
+        else
+          bot_event.respond "#{bot_event.user.mention}, I've found the following bookmarks:\n\n#{bookmarks.values.join("\n\n")}"
+        end
+        break
+      when 'remove'
+      when 'delete'
+      when 'del'
+      when 'rm'
+        bot_event.respond "#{bot_event.user.mention}, placeholder for removing bookmarks."
+      else
+        bot_event.respond "#{bot_event.user.mention}, that's an unsupported action."
+    end
+  end
+end
+
 bot.include! JoinAnnouncer
+bot.include! CoordinateBookmarks
 bot.run
 
