@@ -620,6 +620,7 @@ module CoordinateBookmarks
       bookmark = Bookmark.json_create(bookmark)
       @bookmarks[bookmark.coords] = bookmark
     end
+    @bookmarks
   end
 
   class Bookmark
@@ -680,37 +681,78 @@ module CoordinateBookmarks
   end
 
   extend Discordrb::Commands::CommandContainer
-    
+
+  def self.add_bookmark(keywords)
+    bookmark = Bookmark.new(**keywords)
+    bookmarks[bookmark.coords] = bookmark
+    save_config(source_file: BOOKMARKS_SOURCE, config: bookmarks, pretty_print: false, backup: true)
+    bookmark
+  end    
+
+  def self.normalise_bookmark_type(bookmark_type)
+    if bookmark_type.match(/(?:alliance ?)?fort/i)
+      bookmark_type = 'fort'
+    elsif bookmark_type.match(/poi|point of interest/i)
+      bookmark_type = 'POI'
+    elsif bookmark_type.match(/(?:dragon ?)?alt[ae]r/i)
+      bookmark_type = 'altar'
+    end
+    return bookmark_type
+  end
+
+  command :fort do |bot_event, alliance_tag, x, y, *name|
+    name = name.empty? ? "Alliance Fortress" : name.join(' ')
+    bookmark = add_bookmark({
+      type: normalise_bookmark_type('fort'), 
+      name: name,
+      created_by: bot_event.user.mention,
+      x: x,
+      y: y,
+      alliance_tag: alliance_tag
+    })
+    bot_event.respond "#{bot_event.user.mention}, I've added the following bookmark:\n\n#{bookmark}"
+  end
+
+  command :whereis do |bot_event, alliance_tag|
+    bot_event.respond "#{bot_event.user.mention}, I've found the following bookmarks:\n\n#{bookmarks.select{|coords, bookmark|bookmark.alliance_tag.downcase == alliance_tag.downcase}.values.join("\n\n")}"
+  end
+
   command :bookmark do |bot_event, action, *args|
     case action
       when 'add'
-          if md = args.join(' ').match(/(?<type>(?:alliance )?fort|hive|castle|poi|point of interest|avalon|misc) (?<coords>(?<x>\d{1,4})[: ,](?<y>\d{1,4})) (?:\[(?<alliance_tag>[a-z0-9]{3})\] ?)?(?<name>.+)/i)
+          if md = args.join(' ').match(/(?<type>(?:alliance ?)?fort|hive|castle|poi|point of interest|avalon|misc|portal|(?:dragon ?)?alt[ae]r) (?<coords>(?<x>\d{1,4})[: ,](?<y>\d{1,4})) (?:\[(?<alliance_tag>[a-z0-9]{3})\] ?)?(?<name>.+)/i)
             keywords = {created_by: bot_event.user.mention}
             [:type, :name, :x, :y, :alliance_tag].each do |key|
               keywords[key] = md[key.to_s]
             end
-            bookmark = Bookmark.new(keywords)
-            bookmarks[bookmark.coords] = bookmark
-            save_config(source_file: BOOKMARKS_SOURCE, config: bookmarks, pretty_print: false, backup: true)
+
+            keywords[:type] = normalise_bookmark_type(keywords[:type])
+
+            bookmark = add_bookmark(keywords)
             bot_event.respond "#{bot_event.user.mention}, I've added the following bookmark:\n\n#{bookmark}"
           else
             bot_event.respond "#{bot_event.user.mention}, when adding bookmarks, request should be in the format:\n!bookmark add type coords [tag] name\nor:\n!bookmark add type coords name\nEx:\n\n!bookmark add fort 1234:567 [d0a] Dead 0r Alive"
           end
-        break
+      break
+
       when 'list'
         if bookmarks.empty?
           bot_event.respond "#{bot_event.user.mention}, I could not find any bookmarks"  
         else
           bot_event.respond "#{bot_event.user.mention}, I've found the following bookmarks:\n\n#{bookmarks.values.join("\n\n")}"
         end
-        break
+      break
+
       when 'remove'
       when 'delete'
       when 'del'
       when 'rm'
         bot_event.respond "#{bot_event.user.mention}, placeholder for removing bookmarks."
+      break
+
       else
         bot_event.respond "#{bot_event.user.mention}, that's an unsupported action."
+      break
     end
   end
 end
