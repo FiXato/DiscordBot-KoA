@@ -696,9 +696,30 @@ module CoordinateBookmarks
       bookmark_type = 'POI'
     elsif bookmark_type.match(/(?:dragon ?)?alt[ae]r/i)
       bookmark_type = 'altar'
+    elsif bookmark_type.match(/(?<storehouse>(?:(?:safe|store|storage) ?house)|storage)/i)
+      bookmark_type = 'storehouse'
     end
     return bookmark_type
   end
+
+  # class Alliance
+  #   attr_accessor :alliance_tag, :name, :motto, :rss_types
+  #   def initialize(alliance_tag, name: nil, motto: nil, rss_types: nil)
+  #     @alliance_tag = alliance_tag
+  #     @name = name
+  #     @motto = motto
+  #     @rss_types = rss_types.select{|rss_type| [:food, :wood, :iron, :silver].include?(rss_type)}
+  #   end
+  # end
+
+  # class AllianceGroup
+  #   attr_accessor :name, :main_alliance, :sub_alliances
+  #   def initialize(main_alliance:, name: nil, sub_alliances: [])
+  #     @main_alliance = main_alliance
+  #     @name = name || main_alliance.name
+  #     @sub_alliances = [sub_alliances].flatten.compact
+  #   end
+  # end
 
   command :fort do |bot_event, alliance_tag, x, y, *name|
     name = name.empty? ? "Alliance Fortress" : name.join(' ')
@@ -720,7 +741,7 @@ module CoordinateBookmarks
   command :bookmark do |bot_event, action, *args|
     case action
       when 'add'
-          if md = args.join(' ').match(/(?<type>(?:alliance ?)?fort|hive|castle|poi|point of interest|avalon|misc|portal|(?:dragon ?)?alt[ae]r) (?<coords>(?<x>\d{1,4})[: ,](?<y>\d{1,4})) (?:\[(?<alliance_tag>[a-z0-9]{3})\] ?)?(?<name>.+)/i)
+          if md = args.join(' ').match(/(?<type>(?:alliance ?)?fort|hive|castle|poi|point of interest|avalon|misc|portal|(?<storehouse>(?:(?:safe|store|storage) ?house)|storage)|(?:dragon ?)?alt[ae]r) (?<coords>(?<x>\d{1,4})[: ,](?<y>\d{1,4})) (?:\[(?<alliance_tag>[a-z0-9]{3})\] ?)?(?<name>.+)/i)
             keywords = {created_by: bot_event.user.mention}
             [:type, :name, :x, :y, :alliance_tag].each do |key|
               keywords[key] = md[key.to_s]
