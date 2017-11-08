@@ -32,5 +32,8 @@
 **!calculators**
  Lists help for the various calculator commands.
 
+**!bookmark**
+ Shared bookmarks support.
+
 ***!about***
  Learn more about the bot.
