@@ -7,6 +7,13 @@ require 'chronic'
 require 'chronic_duration'
 
 require 'oj'
+Oj.default_options = {
+  bigdecimal_load: :bigdecimal,
+  circular: false,
+  class_cache: true,
+  mode: :json,
+  indent: "  "
+}
 require 'multi_json'
 
 require 'discordrb'
@@ -107,8 +114,8 @@ DISCORD_CLIENT_ID = get_value_from_arguments(option_name: '--discord-client-id',
 REGEX_UPGRADE_CALCULATOR = /(upgrade:?|will it finish in time\??) (?<duration>((?<days>\d+)d ?)?(?<hours>\d+):(?<minutes>\d+):(?<seconds>\d+))(?<timer_help> (?<base_number_helps>\d+)\+(?<bonus_number_helps>\d+) (?<base_timer_help_duration>\d+)\+(?<bonus_timer_help_duration>\d+))?(?<next_event> -next>)?(?<restrict_type> GE-only)?/i.freeze
 REGEX_SPEEDUPS = /how long are (?<m5>\d+)[: ](?<h1>\d+)[: ](?<h3>\d+) speedups\??/i.freeze
 REGEX_WALL_CALCULATOR = /!wall(?<duration> (?:(?<days>\d)d ?)?(?<hours>\d+):(?<minutes>\d+):(?<seconds>\d+)?)?(?<wall_defense> (?<current_wall_defense>\d+)(?:\/(?<max_wall_defense>\d+))?)?/i.freeze
-REGEX_GET_ALLIANCE_PORTAL = /^(?:!(alliance )?portal|when(?:'| i)s (?:(?<alliance_tag>#{config['alliances'].keys.join('|')}) )?(?:alliance )?portal|(?:(?<alliance_tag>#{config['alliances'].keys.join('|')}) )?(?:alliance )?portal soon\?)/i.freeze
-REGEX_GET_FALLEN_KNIGHTS = /^(?:!fallen( knights)?|when(?:'| i)s (?:(?<alliance_tag>#{config['alliances'].keys.join('|')}) )?fallen(?: knights)?|(?:(?<alliance_tag>#{config['alliances'].keys.join('|')}) )?fallen(?: knights)? soon\?)/i.freeze
+REGEX_GET_ALLIANCE_PORTAL = /^(?:!(alliance )?portal|when(?:’|'| i)s (?:(?<alliance_tag>#{config['alliances'].keys.join('|')}) )?(?:alliance )?portal|(?:(?<alliance_tag>#{config['alliances'].keys.join('|')}) )?(?:alliance )?portal soon\?)/i.freeze
+REGEX_GET_FALLEN_KNIGHTS = /^(?:!fallen( knights)?|when(?:’|'| i)s (?:(?<alliance_tag>#{config['alliances'].keys.join('|')}) )?fallen(?: knights)?|(?:(?<alliance_tag>#{config['alliances'].keys.join('|')}) )?fallen(?: knights)? soon\?)/i.freeze
 REGEX_SET_ALLIANCE_PORTAL = /^!set (?:(?<alliance_tag>#{config['alliances'].keys.join('|')}) )?(?:alliance )?portal (?<content>.+)$/i.freeze
 REGEX_SET_FALLEN_KNIGHTS = /^!set (?:(?<alliance_tag>#{config['alliances'].keys.join('|')}) )?(?:fallen|fallen knights|fk) (?<content>.+)$/i.freeze
 REGEX_SET_GOLEM = /^!set (?<keyword>golem|kingdom threat) (?<content>.+)$/i.freeze
@@ -144,7 +151,7 @@ end
 
 def scheduled_events(clear_cache: false, include_expired: false, restrict_types: [], names: [], sort: :time, bot_event: nil, include_private: false)
 	if clear_cache || @scheduled_events.nil? || @scheduled_events[:cached] < Chronic.parse('2 hours ago')
-		bot_event.respond "Scheduled Events cache cleared at request of #{bot_event.user.mention}!" if bot_event && clear_cache
+#		bot_event.respond "Scheduled Events cache cleared at request of #{bot_event.user.mention}!" if bot_event && clear_cache
 		@scheduled_events = {cached: Time.now}.merge(MultiJson.load(open(EVENTS_SOURCE)))
 		@scheduled_events['events'].each {|scheduled_event| scheduled_event[:time] = Chronic.parse(scheduled_event['ISO8601']) unless scheduled_event.has_key?(:time)}
 	end
@@ -368,7 +375,7 @@ bot.message(start_with: ['rally rounds?'], in: channels('alliance', 'control')) 
   bot_event.respond "Fallen Knights Rally Rounds are at 7, 14 and 17, with Fort at rounds 10 and 20. Only those who already have high *individual* ranks are supposed to go into the fort"
 end
 
-bot.message(start_with: ['!next event', /(what|when)('s| is) next event/], in: channels('all')) do |bot_event|
+bot.message(start_with: ['!next event', /(what|when)(’|'| i)s next event/], in: channels('all')) do |bot_event|
 	clear_cache = bot_event.content.include?('clearcache') && bot_event.user.roles.any?{|role|['R4', 'R5'].include?(role.name)}
 	next_event(bot_event: bot_event, clear_cache: clear_cache)
 end
@@ -466,7 +473,7 @@ def upgrade_calculator(bot_event, format: :default, restrict_types: [], index: 0
     if time_difference > 0
       if time_difference >= (24 * 60 * 60)
         msg += "It will take longer than 24 hours though, so unless you have enough speedups, it will finish **after the upgrade stage has ended** :cry:\n\n"
-        msg += "Speedups needed to finish it before the end of the stage:\n**#{speedups[:end_of_stage]['3h']}** x 3h\n**#{speedups[:end_of_stage]['1h']}** x 1h\n**#{speedups[:end_of_stage]['5m']}** x 5m\nRemaining:#{speedups[:end_of_stage]['remainder'].divmod(60).join(' minutes ')} seconds. If there's a remainder, you need another 5m speedup at the very least.\n\n"
+        msg += "Speedups needed to finish it before the end of the stage:\n**#{speedups[:end_of_stage]['3h']}** x 3h (or #{speedups[:end_of_stage]['3h'] * 3} + #{speedups[:end_of_stage]['1h']} x 1h = #{speedups[:end_of_stage]['3h'] * 3 + speedups[:end_of_stage]['1h']} 1h)\n**#{speedups[:end_of_stage]['1h']}** x 1h\n**#{speedups[:end_of_stage]['5m']}** x 5m\nRemaining:#{speedups[:end_of_stage]['remainder'].divmod(60).join(' minutes ')} seconds. If there's a remainder, you need another 5m speedup at the very least.\n\n"
       end
       msg += "Speedups needed to finish it at the start of the stage:\n**#{speedups[:start_of_stage]['3h']}** x 3h\n**#{speedups[:start_of_stage]['1h']}** x 1h\n**#{speedups[:start_of_stage]['5m']}** x 5m\nRemaining:#{speedups[:start_of_stage]['remainder'].divmod(60).join(' minutes ')} seconds\n\n"
     end
@@ -536,7 +543,7 @@ bot.message(start_with: /!next \d+ events/, in: channels('all')) do |bot_event|
 	clear_cache = bot_event.content.include?('clearcache') && bot_event.user.roles.any?{|role|['R4', 'R5'].include?(role.name)}
 	amount = bot_event.content.match(/!next (\d+) events/)[1].to_i
 	amount = 1 if amount <= 0
-	amount = 10 if amount > 10
+	amount = 10 if amount > 30
 
 	upcoming_events = scheduled_events(include_expired: false, sort: :time, clear_cache: clear_cache, include_private: include_private?(bot_event))[0,amount]
 	unless upcoming_events.empty?
@@ -558,7 +565,7 @@ bot.message(start_with: /!next \d+ events/, in: channels('all')) do |bot_event|
 	end
 end
 
-bot.message(start_with: ['!next stage', /(what|when)('s| is) next stage/, /what stage('s| is) next/], in: channels('all')) do |bot_event|
+bot.message(start_with: ['!next stage', /(what|when)(’|'| i)s next stage/, /what stage(’|'| i)s next/], in: channels('all')) do |bot_event|
   	clear_cache = bot_event.content.include?('clearcache') && bot_event.user.roles.any?{|role|['R4', 'R5'].include?(role.name)}
 	grouped_events = scheduled_events(include_expired: false, sort: :time, restrict_types: ['Gold Event', 'Alliance Event'], clear_cache: clear_cache).group_by{|scheduled_event|scheduled_event['type']}
 	grouped_events.each do |event_type, events|
@@ -652,6 +659,7 @@ module CoordinateBookmarks
     end
   
     def to_json(*a)
+      a.first[:indent] = ' ' * a.first[:indent] if a.first[:indent].kind_of?(Integer)
       { json_class: self.class.name,
         type: @type,
         name: @name,
@@ -685,7 +693,7 @@ module CoordinateBookmarks
   def self.add_bookmark(keywords)
     bookmark = Bookmark.new(**keywords)
     bookmarks[bookmark.coords] = bookmark
-    save_config(source_file: BOOKMARKS_SOURCE, config: bookmarks, pretty_print: false, backup: true)
+    save_config(source_file: BOOKMARKS_SOURCE, config: bookmarks, pretty_print: true, backup: true)
     bookmark
   end    
 
@@ -734,8 +742,14 @@ module CoordinateBookmarks
     bot_event.respond "#{bot_event.user.mention}, I've added the following bookmark:\n\n#{bookmark}"
   end
 
-  command :whereis do |bot_event, alliance_tag|
-    bot_event.respond "#{bot_event.user.mention}, I've found the following bookmarks:\n\n#{bookmarks.select{|coords, bookmark|bookmark.alliance_tag.downcase == alliance_tag.downcase}.values.join("\n\n")}"
+  command :whereare do |bot_event, alliance_tag|
+    results = bookmarks.select{|coords, bookmark|bookmark.alliance_tag.downcase == alliance_tag.downcase rescue false}
+    bot_event.respond "#{bot_event.user.mention}, I've found #{results.size} bookmarks:\n\n#{results.values.join("\n\n")}"
+  end
+
+  command :whereis do |bot_event, keyword|
+    results = bookmarks.select{|coords, bookmark|(bookmark.alliance_tag.downcase.include?(keyword.downcase) rescue false) || (bookmark.name.downcase.include?(keyword.downcase))}
+    bot_event.respond "#{bot_event.user.mention}, I've found #{results.size} bookmarks:\n\n#{results.values.join("\n\n")}"
   end
 
   command :bookmark do |bot_event, action, *args|
