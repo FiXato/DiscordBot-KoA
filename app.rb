@@ -51,6 +51,11 @@ def config
   @config
 end
 
+def cli_help
+  "Command Example: `source YOUR_PROJECT.env && rbenv exec bundle exec ruby ./app.rb  --config-file ./.config-YOUR_PROJECT.json --default-config ./default_config.yaml`"
+end
+abort(cli_help) if ARGV.delete('--help')
+
 def compare_config_to_defaults(loaded_config)
   msg = <<~CONFIG_EOS
     Keys missing from loaded config:
@@ -109,8 +114,8 @@ end
 
 EVENTS_SOURCE = File.expand_path(get_value_from_arguments(option_name: '--events_source', env_key: 'EVENTS_SOURCE', default: 'events.json')).freeze
 ENV['TZ'] = get_value_from_arguments(option_name: '--timezone', env_key: 'TZ', default: 'UTC').freeze # Chronic uses ENV['TZ'] for its timezone.
-DISCORD_TOKEN = get_value_from_arguments(option_name: '--discord-token', env_key: 'DISCORD_BOT_TOKEN', default: nil).freeze
-DISCORD_CLIENT_ID = get_value_from_arguments(option_name: '--discord-client-id', env_key: 'DISCORD_BOT_CLIENT_ID', default: nil).freeze
+DISCORD_TOKEN = get_value_from_arguments(option_name: '--discord-token', env_key: 'DISCORD_BOT_TOKEN', default: nil).freeze || abort('DISCORD_TOKEN cannot be empty.')
+DISCORD_CLIENT_ID = get_value_from_arguments(option_name: '--discord-client-id', env_key: 'DISCORD_BOT_CLIENT_ID', default: nil).freeze || abort('DISCORD_CLIENT_ID cannot be empty.')
 REGEX_UPGRADE_CALCULATOR = /(upgrade:?|will it finish in time\??) (?<duration>((?<days>\d+)d ?)?(?<hours>\d+):(?<minutes>\d+):(?<seconds>\d+))(?<timer_help> (?<base_number_helps>\d+)\+(?<bonus_number_helps>\d+) (?<base_timer_help_duration>\d+)\+(?<bonus_timer_help_duration>\d+))?(?<next_event> -next>)?(?<restrict_type> GE-only)?/i.freeze
 REGEX_SPEEDUPS = /how long are (?<m5>\d+)[: ](?<h1>\d+)[: ](?<h3>\d+) speedups\??/i.freeze
 REGEX_WALL_CALCULATOR = /!wall(?<duration> (?:(?<days>\d)d ?)?(?<hours>\d+):(?<minutes>\d+):(?<seconds>\d+)?)?(?<wall_defense> (?<current_wall_defense>\d+)(?:\/(?<max_wall_defense>\d+))?)?/i.freeze
