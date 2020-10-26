@@ -122,9 +122,11 @@ REGEX_UPGRADE_CALCULATOR = /(upgrade:?|will it finish in time\??) (?<duration>((
 REGEX_SPEEDUPS = /how long are (?<m5>\d+)[: ](?<h1>\d+)[: ](?<h3>\d+) speedups\??/i.freeze
 REGEX_WALL_CALCULATOR = /!wall(?<duration> (?:(?<days>\d)d ?)?(?<hours>\d+):(?<minutes>\d+):(?<seconds>\d+)?)?(?<wall_defense> (?<current_wall_defense>\d+)(?:\/(?<max_wall_defense>\d+))?)?/i.freeze
 REGEX_GET_ALLIANCE_PORTAL = /^(?:!(alliance )?portal|when(?:’|'| i)s (?:(?<alliance_tag>#{config['alliances'].keys.join('|')}) )?(?:alliance )?portal|(?:(?<alliance_tag>#{config['alliances'].keys.join('|')}) )?(?:alliance )?portal soon\?)/i.freeze
+REGEX_REMIND_ALLIANCE_PORTAL = /^!(announce|remind) (?:(?<alliance_tag>#{config['alliances'].keys.join('|')}) )?(alliance )?portal/i.freeze
 REGEX_GET_FALLEN_KNIGHTS = /^(?:!fallen( knights)?|when(?:’|'| i)s (?:(?<alliance_tag>#{config['alliances'].keys.join('|')}) )?fallen(?: knights)?|(?:(?<alliance_tag>#{config['alliances'].keys.join('|')}) )?fallen(?: knights)? soon\?)/i.freeze
 REGEX_SET_ALLIANCE_PORTAL = /^!set (?:(?<alliance_tag>#{config['alliances'].keys.join('|')}) )?(?:alliance )?portal (?<content>.+)$/i.freeze
 REGEX_SET_FALLEN_KNIGHTS = /^!set (?:(?<alliance_tag>#{config['alliances'].keys.join('|')}) )?(?:fallen|fallen knights|fk) (?<content>.+)$/i.freeze
+REGEX_RALLY_ROUNDS = /^[!?]?(fallen|rally) ?rounds\??$/i
 REGEX_SET_GOLEM = /^!set (?<keyword>golem|kingdom threat) (?<content>.+)$/i.freeze
 WALL_DMG_PER_MINUTE = (4.0).freeze
 WALL_BURNING_DURATION_PER_HIT = ChronicDuration.parse('30 minutes').freeze
@@ -245,10 +247,10 @@ bot.message(start_with: '!find ') do |bot_event|
 	end
 end
 
-def alliance_portal_event(bot_event:, clear_cache: false, alliance: config['alliances'].keys.first.downcase)
+def alliance_portal_event(bot_event:, clear_cache: false, alliance: config['alliances'].keys.first.downcase, everyone: false, scheduled_by: nil)
   event_key = alliance + '-portal'
 	target_event = scheduled_events(names: [config['events_map'][event_key]], include_expired: false, sort: :time, bot_event: bot_event, clear_cache: clear_cache, include_private: true).first
-	announce_event(bot_event: bot_event, clear_cache: clear_cache, target_event: target_event, event_name: config['events_map'][event_key])
+	announce_event(bot_event: bot_event, clear_cache: clear_cache, target_event: target_event, event_name: config['events_map'][event_key], everyone: everyone, scheduled_by: scheduled_by)
 end
 
 def fallen_knights_event(bot_event:, clear_cache: false, alliance: config['alliances'].keys.first.downcase)
@@ -266,9 +268,13 @@ def golem_event(bot_event:, clear_cache: false)
 	announce_event(bot_event: bot_event, clear_cache: clear_cache, target_event: target_event, event_name: config['events_map']['golem'])
 end
 
-def announce_event(bot_event:, clear_cache: false, target_event:, event_name: nil)
+def announce_event(bot_event:, clear_cache: false, target_event:, event_name: nil, everyone: false, scheduled_by: nil)
 	if target_event
-		msg = "#{bot_event.user.mention}: The #{target_event['name']} event is currently scheduled for #{target_event[:time]}, which is in about #{time_difference(target_event)}."
+    if everyone
+  		msg = "@everyone, the #{target_event['name']} event is currently scheduled#{scheduled_by ? ' by ' + scheduled_by : ''} for #{target_event[:time]}, which is in about #{time_difference(target_event)}."
+    else
+      msg = "#{bot_event.user.mention}: The #{target_event['name']} event is currently scheduled for #{target_event[:time]}, which is in about #{time_difference(target_event)}."
+    end
 		bot_event.respond check_confirmed(target_event, msg)
 	else
 		bot_event.respond "Sorry #{bot_event.user.mention}, there's currently no next #{event_name} scheduled yet. Maybe check the event centre?"
@@ -344,6 +350,13 @@ bot.message(start_with: REGEX_GET_ALLIANCE_PORTAL, in: channels('alliance', 'con
   	alliance_portal_event(bot_event: bot_event, clear_cache: clear_cache, alliance: alliance_tag.downcase)
 end
 
+bot.message(start_with: REGEX_REMIND_ALLIANCE_PORTAL, in: channels('alliance', 'control')) do |bot_event|
+  	clear_cache = bot_event.content.include?('clearcache') && bot_event.user.roles.any?{|role|['R4', 'R5'].include?(role.name)}
+    md = bot_event.content.match(REGEX_REMIND_ALLIANCE_PORTAL)
+    alliance_tag = md['alliance_tag'] || config['alliances'].keys.first
+  	alliance_portal_event(bot_event: bot_event, clear_cache: clear_cache, alliance: alliance_tag.downcase, everyone: true)
+end
+
 bot.message(start_with: REGEX_GET_FALLEN_KNIGHTS, in:  channels('alliance', 'control')) do |bot_event|
   	clear_cache = bot_event.content.include?('clearcache') && bot_event.user.roles.any?{|role|['R4', 'R5'].include?(role.name)}
     md = bot_event.content.match(REGEX_GET_FALLEN_KNIGHTS)
@@ -361,7 +374,7 @@ bot.message(content: REGEX_SET_ALLIANCE_PORTAL, in:  channels('alliance', 'contr
   alliance_tag = md['alliance_tag'] || config['alliances'].keys.first
 
 	set_event(bot_event: bot_event, event_type: 'portal', event_key: "#{alliance_tag}-portal", content: md['content'])
-	alliance_portal_event(bot_event: bot_event, clear_cache: true, alliance: alliance_tag)
+	alliance_portal_event(bot_event: bot_event, clear_cache: true, alliance: alliance_tag, everyone: true, scheduled_by: bot_event.user.mention)
 end
 
 bot.message(content: REGEX_SET_FALLEN_KNIGHTS, in: channels('alliance', 'control')) do |bot_event|
@@ -378,7 +391,7 @@ bot.message(content: REGEX_SET_GOLEM, in: channels('all')) do |bot_event|
 	golem_event(bot_event: bot_event, clear_cache: true)
 end
 
-bot.message(start_with: ['rally rounds?'], in: channels('alliance', 'control')) do |bot_event|
+bot.message(content: REGEX_RALLY_ROUNDS, in: channels('alliance', 'control')) do |bot_event|
   bot_event.respond "Fallen Knights Rally Rounds are at 7, 14 and 17, with Fort at rounds 10 and 20. Only those who already have high *individual* ranks are supposed to go into the fort"
 end
 
@@ -409,11 +422,17 @@ bot.message(start_with: [REGEX_UPGRADE_CALCULATOR], in: channels('spam', 'contro
   upgrade_calculator(bot_event, restrict_types: restrict_types, index: index)
 end
 
+bot.message_edit(start_with: [REGEX_UPGRADE_CALCULATOR], in: channels('spam', 'control')) do |bot_event|
+  clear_cache = bot_event.content.include?('clearcache') && bot_event.user.roles.any?{|role|['R4', 'R5'].include?(role.name)}
+  restrict_types = (bot_event.content.gsub!(/ GE-only/i, '') ? ['Gold Event'] : [])
+  index = (bot_event.content.gsub!(/ -next/i, '') ? 1 : 0)
+  upgrade_calculator(bot_event, restrict_types: restrict_types, index: index)
+end
+
 def upgrade_calculator(bot_event, format: :default, restrict_types: [], index: 0)
   events = scheduled_events(clear_cache: false, include_expired: false, names: ['Upgrade Stage'], restrict_types: restrict_types, sort: :time, bot_event: nil)
   event = events[index]
-  #TODO: Loop through all events to check which event is the closest.
-  time_till_upgrade_stage = time_difference(event, format: :seconds)
+
   md = bot_event.content.match(REGEX_UPGRADE_CALCULATOR)
   unless md
     bot_event.respond "Could not match your message against the expected format 1d 12:59:59 10+9 60+9"
@@ -424,6 +443,16 @@ def upgrade_calculator(bot_event, format: :default, restrict_types: [], index: 0
       total_timer_help = (md['base_number_helps'].to_i + md['bonus_number_helps'].to_i) * (md['base_timer_help_duration'].to_i + md['bonus_timer_help_duration'].to_i)
     end
     total_upgrade_seconds = upgrade_seconds - total_timer_help
+
+    if event.nil?
+      bot_event.respond "No upcoming upgrade stage known. Maybe you need to *!reschedule* first?"
+      bot_event.respond "Time deducted for timer help: **#{ChronicDuration.output(total_timer_help)}**"
+
+      return false
+    end
+
+    #TODO: Loop through all events to check which event is the closest.
+    time_till_upgrade_stage = time_difference(event, format: :seconds)
     time_difference = (total_upgrade_seconds - time_till_upgrade_stage)
 
     speedups = {start_of_stage: {'3h' => 0, '1h' => 0, '5m' => 0, 'remainder' => 0}, end_of_stage: {'3h' => 0, '1h' => 0, '5m' => 0, 'remainder' => 0}}
@@ -443,6 +472,8 @@ def upgrade_calculator(bot_event, format: :default, restrict_types: [], index: 0
 
         Your Upgrade will take:
         ***#{ChronicDuration.output(total_upgrade_seconds)}***
+
+        _(If you have the Development Lord Talent, you can probably cut this time down to about #{ChronicDuration.output((total_upgrade_seconds * 0.8).to_i)}, though this needs further testing...)_
 
       BOTRESPONSE
 
@@ -480,7 +511,11 @@ def upgrade_calculator(bot_event, format: :default, restrict_types: [], index: 0
     if time_difference > 0
       if time_difference >= (24 * 60 * 60)
         msg += "It will take longer than 24 hours though, so unless you have enough speedups, it will finish **after the upgrade stage has ended** :cry:\n\n"
-        msg += "Speedups needed to finish it before the end of the stage:\n**#{speedups[:end_of_stage]['3h']}** x 3h (or #{speedups[:end_of_stage]['3h'] * 3} + #{speedups[:end_of_stage]['1h']} x 1h = #{speedups[:end_of_stage]['3h'] * 3 + speedups[:end_of_stage]['1h']} 1h)\n**#{speedups[:end_of_stage]['1h']}** x 1h\n**#{speedups[:end_of_stage]['5m']}** x 5m\nRemaining:#{speedups[:end_of_stage]['remainder'].divmod(60).join(' minutes ')} seconds. If there's a remainder, you need another 5m speedup at the very least.\n\n"
+        msg += "Speedups needed to finish it before the end of the stage:\n"
+        msg += "**#{speedups[:end_of_stage]['3h']}** x 3h (or #{speedups[:end_of_stage]['3h'] * 3} + #{speedups[:end_of_stage]['1h']} x 1h = #{speedups[:end_of_stage]['3h'] * 3 + speedups[:end_of_stage]['1h']} 1h)\n"
+        msg += "**#{speedups[:end_of_stage]['1h']}** x 1h\n"
+        msg += "**#{speedups[:end_of_stage]['5m']}** x 5m\n"
+        msg += "Remaining:#{speedups[:end_of_stage]['remainder'].divmod(60).join(' minutes ')} seconds. If there's a remainder, you need another 5m speedup at the very least.\n\n"
       end
       msg += "Speedups needed to finish it at the start of the stage:\n**#{speedups[:start_of_stage]['3h']}** x 3h\n**#{speedups[:start_of_stage]['1h']}** x 1h\n**#{speedups[:start_of_stage]['5m']}** x 5m\nRemaining:#{speedups[:start_of_stage]['remainder'].divmod(60).join(' minutes ')} seconds\n\n"
     end
@@ -489,7 +524,8 @@ def upgrade_calculator(bot_event, format: :default, restrict_types: [], index: 0
       Please note that this is based on the calculation:
         (#{upgrade_seconds} - (#{md['base_number_helps'].to_i} + #{md['bonus_number_helps'].to_i}) * (#{md['base_timer_help_duration'].to_i} + #{md['bonus_timer_help_duration'].to_i})) - #{time_till_upgrade_stage}) = #{time_difference} seconds.
         Or: 
-        (#{md['duration']} base upgrade time - (#{md['base_number_helps'].to_i} + #{md['bonus_number_helps'].to_i} number of timer helps) * (#{md['base_timer_help_duration'].to_i} + #{md['bonus_timer_help_duration'].to_i} = #{ChronicDuration.output(md['base_timer_help_duration'].to_i + md['bonus_timer_help_duration'].to_i)} timer help duration) = #{ChronicDuration.output(total_upgrade_seconds)} upgrade time) - #{ChronicDuration.output(time_till_upgrade_stage)} till upgrade stage ) = #{ChronicDuration.output(time_difference)} seconds.
+        (#{md['duration']} base upgrade time - (#{md['base_number_helps'].to_i} + #{md['bonus_number_helps'].to_i} number of timer helps) * (#{md['base_timer_help_duration'].to_i} + #{md['bonus_timer_help_duration'].to_i} = #{ChronicDuration.output(md['base_timer_help_duration'].to_i + md['bonus_timer_help_duration'].to_i)} timer help duration) 
+        = #{ChronicDuration.output(total_upgrade_seconds)} upgrade time) - #{ChronicDuration.output(time_till_upgrade_stage)} till upgrade stage ) = #{ChronicDuration.output(time_difference)} seconds.
 
       Also, be careful to not accidentally trigger the Instant Building Speedup if there's not a lot of margin between the start of the stage and the remaining construction time.
       Don't blame me if it finishes too soon! ;-) 
